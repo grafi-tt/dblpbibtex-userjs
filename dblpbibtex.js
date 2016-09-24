@@ -1,172 +1,169 @@
 // ==UserScript==
-// @name dblp bibtex formatter
-// @namespace http://grafi.jp/
+// @name        dblp bibtex formatter
+// @namespace   http://grafi.jp/
 // @description hoge
-// @include http://dblp.uni-trier.de/rec/bibtex/*
+// @include     http://dblp.uni-trier.de/rec/bibtex/*
+// @version     1
+// @grant       none
 // ==/UserScript==
 
 (function () {
+"use strict";
 
 //
 // bibtex parser/serealizer
 //
-function ParseBibTeXError() { Error.apply(this, arguments); }
-ParseBibTeXError.prototype = Error;
-
 function parseBibTeXEntry(bibTeXEntry) {
 	var i = 0, m;
-	function scanBibTeXEntry(pat) {
-		if (i >= bibTeXEntry.length) throw new ParseBibTeXError("unexpected end");
-		m = bibTexEntry.match(pat, i);
-		if (m == null) throw new ParseBibTeXError("not matched");
-		i = m.index;
+	function scanBibTeXEntry(patStr) {
+		if (i >= bibTeXEntry.length) throw new Error("unexpected end");
+		var re = new RegExp(patStr, 'y');
+		re.lastIndex = i;
+		m = re.exec(bibTeXEntry);
+		if (m == null) throw new Error("not matched: " + patStr);
+		i = re.lastIndex;
 		return Array.apply(null, m);
 	}
 
 	var bib = {};
-	bib.type = scanBibTeXEntry(/^@(\w+)\s*/)[1];
-	bib.key = scanBibTeXEntry(/^{(\w+),\s*/)[1];
+	bib.type = scanBibTeXEntry("@([a-z]+)\\s*")[1];
+	bib.key = scanBibTeXEntry("{(\\S+?),\\s*")[1];
 	bib.fields = {};
 	do {
-		var field = scanBibTeXEntry(/^(\w+)\s*=\s*/)[1];
-		var value = scanBibTeXEntry(/^{/)[0];
+		var field = scanBibTeXEntry("([a-z]+)\\s*=\\s*")[1];
+		var value = scanBibTeXEntry("{")[0];
 		var depth = 1;
 		while (depth > 0) {
-			value += scanBibTeXEntry(/[^{}]*[{}]/)[0];
-			depth += value.substr(-2) == '\\' ? 0 : value.substr(-1) == '{' ? 1 : -1;
+			value += scanBibTeXEntry("[^{}]*[{}]")[0];
+			depth += value.slice(-2, -1) == '\\' ? 0 : value.slice(-1) == '{' ? 1 : -1;
 		}
-		bib.fields[field] = value.substr(1, -1).replace(/\s+/, ' ');
-		var sep = scanBibTeXEntry(/\s*([,}])/)[1];
-	} while (sep == '}');
+		bib.fields[field] = value.slice(1, -1).replace(/\s+/g, ' ');
+		var sep = scanBibTeXEntry("\\s*([,}])\\s*")[1];
+	} while (sep == ',');
 
-	if (i != bibTeXEntry.length) throw new ParseBibTeXError("unexpected closing bracket");
+	if (i != bibTeXEntry.length) throw new Error("unexpected closing bracket");
 	return bib;
 }
 
 function serializeBibTeXEntry(bib) {
-	return
-		"\n@" + bib.type + "{" + bib.key + ",\n" +
-			Array.prototype.map(bib.fields.keys(),
-					function (k) { return "\t{" + k + " = " + bib.fileds[keys]; } ).join("},\n") +
+	var result =
+		"@" + bib.type + "{" + bib.key + ",\n" +
+			Object.keys(bib.fields).map(
+					function (k) { return "\t" + k + " = {" + bib.fields[k] + "}"; } ).join(",\n") +
 		"\n}\n";
+	return result;
 }
 
 //
 // title normalizer
 //
-function normalizeWords(str) {
-	str = normalizeOrdinals(str);
-	str = normalizeYear(str);
-	return str;
-}
-
 var fstOrdinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
 var tenOrdinals = ["tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth"];
 var sndOrdinals = ["twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth", "eightieth", "ninetieth"];
 var engOrdinals = Array.prototype.concat.apply(fstOrdinals.concat(tenOrdinals),
-		sndOrdinals.map(function (so) { return fstOrdinals.map(function (fo){ return fo + "-" + so; }).shift(so); }));
+		sndOrdinals.map(function (so) {
+			return [so].concat(fstOrdinals.map(function (fo){ return so + "-" + fo; }));
+		}));
 var numOrdinalsTable = {};
-for (var i = 1; i++; i < 100)
+for (var i = 1; i < 100; i++)
 	numOrdinalsTable[engOrdinals[i-1]] = i + ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][i%10];
-var ordinalsPatStr = ordinals.join('|');
+var ordinalsPatStr = engOrdinals.join('|');
 function normalizeOrdinals(name) {
-	name.replace(new Regexp(ordinalsPatStr, 'i'), function (eo) { return numOrdinalsTable[eo]; });
-}
-
-function normalizeYear(str) {
-	str.replace(/'(\d\d)/, "19$1")
+	return name.replace(new RegExp(ordinalsPatStr, 'ig'),
+		function (eo) { return numOrdinalsTable[eo.toLowerCase()]; });
 }
 
 //
 // title parser
 //
 function parseConfTitle(bibTitle) {
-	bibTitle = normalizeWord(bibTitle);
+	bibTitle = normalizeOrdinals(bibTitle);
 	var m;
 	var scanner = {
 		title: {},
 		matchReplace: function (patStr, noIgnoreCase) {
-			var pat = new Regexp(patStr, noIgnoreCase ? '' : 'i');
+			var pat = new RegExp(patStr, noIgnoreCase ? '' : 'i');
 			m = bibTitle.match(pat);
-			if (m) bibTitle = bibTitle.replace(pat);
-			return Array.apply(null, m);
+			if (m) {
+				bibTitle = bibTitle.replace(pat, "");
+				return Array.apply(null, m);
+			}
 		},
 		get bibTitle() { return bibTitle; }
 	}
 
+	removePart(scanner);
 	removeProcSign(scanner);
 	splitConfTitle(scanner);
 	parseConfName(scanner);
 	return scanner.title;
 }
 
-var procs = ["papers", "proceedings", "records"];
+function removePart(scanner) {
+	var partPatStr = ", (Part {I+})$";
+	var partMatched = scanner.matchReplace(partPatStr);
+	if (partMatched) scanner.title.part = partMatched[1];
+}
+
+var procs = ["papers", "proceedings", "record", "records"];
 function removeProcSign(scanner) {
 	// check and remove "Proceeding of"/"Proceedings." or so
 	var procPatStr = "[a-z ]*(?:" + procs.join("|") + ")";
-	var procHeadPatStr = "^(" + procPat + ")(?: (?:of|from))?";
-	var procTailPatStr = "(" + procPat + ")\.?";
-	var proc = scanner.matchReplace(procHeadPatStr);
-	if (!proc) proc = scanner.matchReplace(procTailPatStr);
-	if (proc) scanner.title.proc = proc[0];
+	var procHeadPatStr = "^(" + procPatStr + ")(?: (?:of|from))?";
+	var procTailPatStr = ", (" + procPatStr + ")\.?$";
+	var procMatched = scanner.matchReplace(procHeadPatStr);
+	if (!procMatched) procMatched = scanner.matchReplace(procTailPatStr);
+	if (procMatched) scanner.title.proc = procMatched[1];
 }
 
 var states = {"AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming"};
 var nonNewYorkCities = ["Albany", "Buffalo", "Rochester"];
-var cityCountries = ["Singapore"];
+var cityCountries = ["Luxembourg", "Monaco", "Singapore"];
 var monthes = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 function splitConfTitle(scanner) {
-	var addrPatStr =
-		"(" +
-			cityCountries.join("|") +
-		"|" +
-			nonNewYorkCities.map(function (c) {
-				return c + ", New York, USA";
-			}).join("|") +
-		"|"
-			"NewYork, USA" +
-		"|" +
-			Array.prototype.concat(states.keys(), states.values()).map(function (s) {
-				return "[a-z ]+, " + s + ", USA";
-			}).join("|") +
-		"|" +
-			"[a-z ]+, [a-z ]+, [a-tv-z ][a-z ]*" +
-			"|" +
-			"[a-z ]+, [a-z ]+, u[a-rt-z ]*" +
-			"|" +
-			"[a-z ]+, [a-z ]+, us[b-z ]*" +
-		")";
+	var cityCountriesPatStr = "(" +
+		cityCountries.map(function (c) { return c + "|" + c + ", " + c; }).join("|") +
+	")";
+	var usaPatStr = "(" +
+		["NewYork, USA"].concat(
+			nonNewYorkCities.map(function (c) { return c + ", New York, USA"; }),
+			Object.keys(states).concat(Object.values(states)).map(function (s) { return "[a-z ]+, " + s + ", USA"; })
+		).join("|") +
+	")";
+	var otherPatStr = ("([a-z]+, [a-z]+)");
 
 	var monthesPatStr = "(" + monthes.join("|") + ")";
-	var dayPatStr = "([123]?[0-9])(?:st|nd|rd|th)?";
+	var daysPatStr = "([123]?[0-9])(?:st|nd|rd|th)?";
 	var datePatStr =
 		"(?:" +
 			monthesPatStr + " " + daysPatStr +
 			"(?: ?- ?(?:" +
-				dayPatStr +
+				daysPatStr +
 			"|" +
 				monthesPatStr + " " + daysPatStr +
 			"))?" +
 		"|" +
 			"(?:" +
-				dayPatStr + "(?: ?- ?" + dayPatStr + ")?" +
+				daysPatStr + "(?: ?- ?" + daysPatStr + ")?" +
 			",? )?" + monthesPatStr +
 		")" +
-		"(?:,? (\d{4}))?";
-
-	var addrDatePatStr = "\b" + addrPatStr + ", " + datePatStr + "$";
-	var dateAddrPatStr = "\b" + datePatStr + ", " + addrPatStr + "$";
+		"(?:,? ([0-9]{4}))?";
 
 	var dateMatched;
-	if ((dateMatched = scanner.matchReplace(addrDatePatStr))) {
-		scanner.title.addr = dateMatched[1];
-		dateMatched = Array.prototype.slice.call(dateMatched, 1);
-	} else if ((dateMatched = scanner.matchReplace(dateAddrPatStr))) {
-		scanner.title.addr = addrDate[-1];
-		dateMatched = Array.prototype.slice.call(dateMatched, 0, -1);
-	} else {
-		return;
-	}
+	[cityCountriesPatStr, usaPatStr, otherPatStr].some(function (addrPatStr) {
+		var addrDatePatStr = ", " + addrPatStr + ", " + datePatStr + "$";
+		var dateAddrPatStr = ", " + datePatStr + ", " + addrPatStr + "$";
+		if ((dateMatched = scanner.matchReplace(addrDatePatStr))) {
+			scanner.title.addr = dateMatched[1];
+			dateMatched = Array.prototype.slice.call(dateMatched, 1);
+		} else if ((dateMatched = scanner.matchReplace(dateAddrPatStr))) {
+			scanner.title.addr = addrDate[-1];
+			dateMatched = Array.prototype.slice.call(dateMatched, 0, -1);
+		}
+		return dateMatched;
+	});
+	if (!dateMatched) return;
+
 	var date = {};
 	date.month1 = dateMatched[1] || dateMatched[8];
 	date.day1 = dateMatched[2] || dateMatched[6];
@@ -181,30 +178,29 @@ function splitConfTitle(scanner) {
 var confs = ["conference", "colloquium", "meeting", "symposium", "workshop"];
 function parseConfName(scanner) {
 	var rawTitleName = scanner.bibTitle;
+	var title = scanner.title;
 
 	// check and remove "International Conference" or so
-	var confPatStr = "([A-Za-z ]*(?:" + confs.join("|") + "))(?: on)?";
+	var confPatStr = "((?:[0-9a-z'{}]+ )*(?:" + confs.join("|") + "))(?: on)?";
 	var conf, confMatched = scanner.matchReplace(confPatStr);
 	if (confMatched) conf = confMatched[1];
 
 	// check and remove "{ABCD} 2000" or so
-	var shortTitlePatStr = "{?([A-Z][a-zA-Z]*[A-Z])}? ?('?\d\d|\d\d\d\d)";
-	var shortTitle, shortTitleMatched = scanner.matchReplace(shortTitlePatStr, true);
-	if (shortTitleMatched) {
-		shortTitle = {};
-		shortTitle.name = shortTitleMatched[1];
-		if (shortTitleMatched[2])
-			shortTitle.year = shortTitleMatched[2];
+	var abbrPatStr = "\\b{?([A-Z][a-zA-Z]*[A-Z])}? ?('?[0-9]{2}|[0-9]{4})\\b";
+	var abbr, abbrMatched = scanner.matchReplace(abbrPatStr, true);
+	if (abbrMatched) {
+		title.abbrName = abbrMatched[1];
+		if (abbrMatched[2])
+			title.abbrYear = abbrMatched[2].replace(/^'?(\d\d)$/, "19$1");
 	}
 
-	var restNamePatStr = "^(?:[^a-z0-9]*[^a-z0-9{])?([a-z0-9{][a-z0-9{}, ]*[a-z0-9}])[^a-z0-9]*$"
-	var restNameMatched = scanner.matchReplace(restNamePatStr);
-	var longTitle = {}
-	if (restNameMatched) {
-		longTitle.name = restNameMatched[1];
-		if (conf) longTitle.conf = conf;
+	var restPatStr = "^(?:[^a-z0-9]*[^a-z0-9{])?([a-z0-9{][a-z0-9{}, ]*[a-z0-9}])[^a-z0-9]*$";
+	var restMatched = scanner.matchReplace(restPatStr);
+	if (restMatched) {
+		title.name = restMatched[1];
+		if (conf) title.conf = conf;
 	} else {
-		longTitle.name = rawTitleName;
+		title.name = rawTitleName;
 	}
 }
 
@@ -212,29 +208,28 @@ function parseConfName(scanner) {
 // title serializer
 //
 function serializeName(title) {
-	var longName = "";
-	if (title.proc) longName += proc + " of ";
-	if (title.longName) {
-		if (title.conf) longName += title.conf + " on ";
-		longName += title.longName;
-	} else {
-		if (!title.conf) return;
-		longName += title.conf;
-	}
-	return longName;
+	var result = "";
+	if (title.proc) result += title.proc + " of ";
+	if (title.conf) result += title.conf + " on ";
+	result += title.name;
+	if (title.abbrName) result += ", {" + title.abbrName + "}";
+	if (title.abbrYear) result += " " + title.abbrYear;
+	if (title.part) result += ", " + title.part;
+	return result;
 }
 
 function serializeDate(title) {
-	if (!title.month1) return;
+	if (!title.date) return;
+	var date = title.date;
 
-	function shortenMonth(month) { return month.substr(0, 3).toLowerCase(); }
-	var result = shortenMonth(title.month1);
-	if (title.month2)
-		result += " # {~" + title.day1 + "--} # " + shortenMonth(title.month2) + " # {" + title.day2 + "}";
-	else if (title.day2)
-		result += " # {~" + title.day1 + "--" + title.day2 + "}";
-	else if (title.day1)
-		result += result += " # {~" + title.day1 + "}";
+	function shortenMonth(month) { return month.slice(0, 3).toLowerCase(); }
+	var result = shortenMonth(date.month1);
+	if (date.month2)
+		result += " # {~" + date.day1 + "--} # " + shortenMonth(date.month2) + " # {" + date.day2 + "}";
+	else if (date.day2)
+		result += " # {~" + date.day1 + "--" + date.day2 + "}";
+	else if (date.day1)
+		result += result += " # {~" + date.day1 + "}";
 	return result;
 }
 
@@ -246,12 +241,12 @@ function serializeAddr(title){
 // ISBN
 //
 function removeIsbnHyphen(isbn) {
-	return isbn.replace('-', '');
+	return isbn.replace(/-/g, '');
 }
 
 function toIsbn13(isbn) {
 	if (isbn.length == 10) {
-		isbn = '978' + isbn.substr(0, -1);
+		isbn = '978' + isbn.slice(0, -1);
 		var w1 = 0, w3 = 0;
 		for (var i = 0; i < 12; i++) {
 			if (i % 2 == 0) {
@@ -262,6 +257,7 @@ function toIsbn13(isbn) {
 		}
 		isbn += (w1 + w3 * 3) % 10;
 	}
+	return isbn;
 }
 
 function addIsbnHyphen(isbn) {
@@ -276,35 +272,99 @@ function addIsbnHyphen(isbn) {
 			'4': [['00', '19'], ['200', '699'], ['7000', '8499'], ['85000', '89999'], ['900000', '949999'], ['9500000', '9999999']],
 		}
 	};
-	Object.keys(isbnTable).forEach(function (ean) {
-		if (isbn.startWith(ean)) {
-			var afterEan = isbn.substr(ean.length);
-			Object.keys(isbnTable[ean]).forEach(function (group) {
-				if (afterEan.startWith(group)) {
-					var afterGroup = afterEan.substr(group.length);
-					isbnTable[ean][group].forEach(function (publisherRange)) {
-						var publisher = afterGroup.substr(0, publisherRange[0].length);
-						if (publisherRange[0] <= publisher && publisher <= publisherRange[1]) {
-							var title = afterGroup.substr(publisher.length, -1);
-							var checkdigit = afterGroup.substr(-1, -1);
-							return [ean, group, publisher, title, checkdigit].join('-'); // success
-						}
-					}
-					return isbn; // publisher not found
-				}
-			});
-			return isbn; // group not found
-		}
-	});
-	return isbn; // ean not found
+
+	function searchEan() {
+		Object.keys(isbnTable).some(function (ean) {
+			if (isbn.startsWith(ean))
+				return searchGroup(ean);
+		});
+	}
+	function searchGroup(ean) {
+		Object.keys(isbnTable[ean]).some(function (group) {
+			if (isbn.startsWith(group, ean.length))
+				return searchPublisher(ean, group);
+		});
+	}
+	function searchPublisher(ean, group) {
+		isbnTable[ean][group].some(function (publisherRange) {
+			var publisher = isbn.substr((ean + group).length, publisherRange[0].length);
+			if (publisherRange[0] <= publisher && publisher <= publisherRange[1])
+				return updateIsbn(ean, group, publisher);
+		});
+	}
+	function updateIsbn(ean, group, publisher) {
+		var title = isbn.slice((ean + group + publisher).length, -1);
+		var checkDigit = isbn.slice(-1);
+		isbn = [ean, group, publisher, title, checkDigit].join("-");
+		return true;
+	}
+
+	searchEan();
+	return isbn;
+}
+
+//
+// update bib
+//
+function updateBib(bib) {
+	processConfTitle(bib);
+	normalizeIsbn(bib);
+	confKeyToId(bib);
+	seriesToId(bib);
+	journalToId(bib);
+	removeFields(bib);
+}
+
+function processConfTitle(bib) {
+	if (bib.type == "proceedings") {
+		var title = parseConfTitle(bib.fields.title);
+		bib.fields.title = serializeName(title);
+		var date = serializeDate(title);
+		if (date) bib.fields.month = date;
+		var addr = serializeAddr(title);
+		if (addr) bib.fields.address = addr;
+	}
+}
+
+function normalizeIsbn(bib) {
+	if (bib.fields.isbn)
+		bib.fields.isbn = addIsbnHyphen(toIsbn13(removeIsbnHyphen(bib.fields.isbn)));
+}
+
+function confKeyToId(bib) {
+	if (bib.type == "proceedings")
+		bib.key = bib.key.replace("DBLP:conf", "c").replace(/\//g, ":").replace(/-/g, ":");
+}
+
+function seriesToId(bib) {
+	var table = {
+		"{EPTCS}": "s:eptcs",
+		"LIPIcs": "s:lipics",
+		"Lecture Notes in Computer Science": "s:lncs",
+		"Lecture Notes in Mathematics": "s:lnm",
+	};
+	if (bib.fields.series && table[bib.fields.series])
+		bib.fields.series = table[bib.fields.series];
+}
+
+function journalToId(bib) {
+	var table = {
+		"J. {ACM}": "j:jacm",
+	};
+	if (bib.fields.journal && table[bib.fields.journal])
+		bib.fields.journal = table[bib.fields.journal];
+}
+
+function removeFields(bib) {
+	['timestamp', 'biburl', 'bibsource'].forEach(function (field) { delete bib.fields[field]; });
 }
 
 //
 // Async Update
 //
-function updateAsync(bib, cb) {
-	resolveDoi();
-	fetchSpringerDoi();
+function updateBibAsync(bib, cb) {
+	resolveDoi(bib, cb);
+	fetchSpringerDoi(bib, cb);
 }
 
 function resolveDoi(bib, cb) {
@@ -327,7 +387,7 @@ function resolveDoi(bib, cb) {
 function fetchSpringerDoi(bib, cb) {
 	if (bib.fields.doi) return;
 	var isbn = bib.fields.isbn;
-	var isSpringer = isbn && ["978-3-540", "978-3-642"].find( function (prefix) { return prefix.startWith(isbn); });
+	var isSpringer = isbn && ["978-3-540", "978-3-642"].find( function (prefix) { return prefix.startsWith(isbn); });
 	if (isSpringer) {
 		GM_xmlhttpRequest({
 			method: 'GET',
@@ -347,80 +407,25 @@ function fetchSpringerDoi(bib, cb) {
 }
 
 //
-// update bib
-//
-function update(bib) {
-	processConfTitle(bib);
-	normalizeIsbn(bib);
-	confKeyToId(bib);
-	seriesToId(bib);
-	journalToId(bib);
-	removeFields(bib);
-}
-
-function processConfTitle(bib) {
-	if (bib.type == "proceedings") {
-		var title = parseConfTitle(bib.fields.title);
-		bib.fields.title = serializeName(title);
-		var date = serializeDate(title);
-		if (date) bib.fields.month = date;
-		var addr = serializeAddr(title);
-		if (addr) bib.fields.address = addr;
-	}
-}
-
-function normalizeIsbn(bib) {
-	var isbn = bib['isbn'];
-	if (!isbn) return;
-	bib['isbn'] = addIsbnHyphen(toIsbn13(removeIsbnHyphen(isbn)));
-}
-
-function confKeyToId(bib) {
-	if (bib.type = "proceedings")
-		bib.key = bib.key.replace("DBLP:conf", "c").replace("/", ":").replace("-", ":");
-}
-
-function seriesToId(bib) {
-	var table = {
-		"{EPTCS}": "s:eptcs",
-		"LIPIcs": "s:lipics",
-		"Lecture Notes in Computer Science": "s:lncs",
-		"Lecture Notes in Mathematics": "s:lnm",
-	};
-	if (bib.series && table[bib.series])
-		bib.series = table[bib.series];
-}
-
-function journalToId(bib) {
-	var table = {
-		"J. {ACM}": "j:jacm",
-	};
-	if (bib.journal && table[bib.journal])
-		bib.journal = table[bib.journal];
-}
-
-function removeFields(bib) {
-	['timestamp', 'biburl', 'bibsource'].forEach(function (field) { delete bib[field]; });
-}
-
-//
 // modify dblp page
 //
 return function () {
-	var xpath = "id(bibtex-section)/pre";
-	var pre, preIt = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_ITERATOR_TYPE, null);
-	while ((pre = preIt.iterateNext())) {
-		var bibTexEntry = pre.textContent;
+	var xpath = "id('bibtex-section')/pre";
+	var nodes = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+	for (var i = 0; i < nodes.snapshotLength; i++) {
+		var pre = nodes.snapshotItem(i);
+		var bibTeXEntry = pre.textContent;
 		try {
 			var bib = parseBibTeXEntry(bibTeXEntry);
-		} catch {
-			continue;
+			function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
+			updateBib(bib);
+			writePre();
+			updateBibAsync(bib, writePre);
+		} catch (e) {
+			console.error(e);
+			throw e;
 		}
-		function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
-		updateBib(bib);
-		writePre();
-		updateBibAsync(bib, writePre);
 	}
 }
 
-})();
+})()();
