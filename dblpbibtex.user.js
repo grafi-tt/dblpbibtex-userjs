@@ -46,10 +46,11 @@ function parseBibTeXEntry(bibTeXEntry) {
 }
 
 function serializeBibTeXEntry(bib) {
+	function enbrace(k, v) { return k == "month" ? v : "{" + v + "}"; }
 	var result =
 		"@" + bib.type + "{" + bib.key + ",\n" +
 			Object.keys(bib.fields).map(
-					function (k) { return "\t" + k + " = {" + bib.fields[k] + "}"; } ).join(",\n") +
+					function (k) { return "\t" + k + " = " + enbrace(k, bib.fields[k]); } ).join(",\n") +
 		"\n}\n";
 	return result;
 }
@@ -310,8 +311,10 @@ function updateBib(bib) {
 	processConfTitle(bib);
 	normalizeIsbn(bib);
 	confKeyToId(bib);
-	seriesToId(bib);
+	articleId(bib);
 	journalToId(bib);
+	publisherToId(bib);
+	seriesToId(bib);
 	removeFields(bib);
 }
 
@@ -332,31 +335,57 @@ function normalizeIsbn(bib) {
 }
 
 function confKeyToId(bib) {
+	function conv(key) { return key.replace("DBLP:conf", "c").replace(/\//g, ":").replace(/-/g, ":"); }
 	if (bib.type == "proceedings")
-		bib.key = bib.key.replace("DBLP:conf", "c").replace(/\//g, ":").replace(/-/g, ":");
+		bib.key = conv(bib.key);
+	if (bib.type == "inproceedings" && bib.fields.crossref)
+		bib.fields.crossref = conv(bib.fields.crossref);
 }
 
-function seriesToId(bib) {
-	var table = {
-		"{EPTCS}": "s:eptcs",
-		"LIPIcs": "s:lipics",
-		"Lecture Notes in Computer Science": "s:lncs",
-		"Lecture Notes in Mathematics": "s:lnm",
-	};
-	if (bib.fields.series && table[bib.fields.series])
-		bib.fields.series = table[bib.fields.series];
+function articleId(bib) {
+	if (bib.type != "proceedings") {
+		var lastNames = bib.fields.author.split(" and ").map(function (n) {
+			return n.split(" ").pop().replace(/[^a-z]/gi, "");
+		});
+		var titleWords = bib.fields.title.split(" ").map(function (w) {
+			return w.replace(/[^a-z]/gi, "");
+		});
+		bib.key =
+			lastNames[0] + lastNames.slice(1).map(function (l) { return l.charAt(); }).join("") +
+			(bib.fields.year ? bib.fields.year.slice(-2) : "") +
+			titleWords.slice(0, 3).map(function (w) { return w.toLowerCase().charAt(); }).join("");
+	}
 }
 
-function journalToId(bib) {
-	var table = {
-		"J. {ACM}": "j:jacm",
-	};
-	if (bib.fields.journal && table[bib.fields.journal])
-		bib.fields.journal = table[bib.fields.journal];
+var journalTable = {
+	"Logical Methods in Computer Science": "j:lmcs",
+	"Inf. Comput.": "j:ic",
+	"J. {ACM}": "j:jacm",
 }
+var publisherTable = {
+	"Elsevier": "p:elsevier",
+	"{IEEE} Computer Society": "p:ieeecomp",
+	"Springer": "p:springer",
+}
+var seriesTable = {
+	"{EPTCS}": "s:eptcs",
+	"LIPIcs": "s:lipics",
+	"Lecture Notes in Computer Science": "s:lncs",
+	"Lecture Notes in Mathematics": "s:lnm",
+}
+function lookupFunction(field, table) {
+	return function (bib) {
+		if (bib.fields[field] && table[bib.fields[field]])
+			bib.fields[field] = table[bib.fields[field]];
+	}
+}
+var journalToId = lookupFunction("journal", journalTable);
+var publisherToId = lookupFunction("publisher", publisherTable);
+var seriesToId = lookupFunction("series", seriesTable);
 
 function removeFields(bib) {
 	['timestamp', 'biburl', 'bibsource'].forEach(function (field) { delete bib.fields[field]; });
+	if (bib.type == "inproceedings" && bib.fields.crossref) delete bib.fields.booktitle;
 }
 
 //
