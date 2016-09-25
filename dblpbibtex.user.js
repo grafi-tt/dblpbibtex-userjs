@@ -4,7 +4,7 @@
 // @description hoge
 // @include     http://dblp.uni-trier.de/rec/bibtex/*
 // @version     1
-// @grant       none
+// @grant       GM_xmlhttpRequest
 // ==/UserScript==
 
 (function () {
@@ -372,13 +372,13 @@ function resolveDoi(bib, cb) {
 	if (bib.fields.url && !bib.fields.url.match("dx.doi.org")) return;
 	GM_xmlhttpRequest({
 		method: 'GET',
-		url: 'https://doi.org/api/handles/' + encodeURIComponent(bib.fields.doi),
+		url: 'http://doi.org/api/handles/' + encodeURIComponent(bib.fields.doi),
 		onload: function (response) {
 			var json = response.responseText;
 			if (!json) return;
-			var url = json.match(/"(https?:\/\/.*?)"/)[1];
-			if (!url) return;
-			bib.fields.url = url;
+			var urlMatched = json.match(/"(https?:\/\/.+?)"/);
+			if (!urlMatched) return;
+			bib.fields.url = urlMatched[1];
 			cb();
 		}
 	});
@@ -413,18 +413,27 @@ return function () {
 	var xpath = "id('bibtex-section')/pre";
 	var nodes = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 	for (var i = 0; i < nodes.snapshotLength; i++) {
-		var pre = nodes.snapshotItem(i);
-		var bibTeXEntry = pre.textContent;
-		try {
-			var bib = parseBibTeXEntry(bibTeXEntry);
-			function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
-			updateBib(bib);
-			writePre();
-			updateBibAsync(bib, writePre);
-		} catch (e) {
-			console.error(e);
-			throw e;
-		}
+		// to make writePre closure
+		(function () {
+			var pre = nodes.snapshotItem(i);
+			var origPre = pre.cloneNode(true);
+			var bibTeXEntry = pre.textContent;
+			try {
+				var bib = parseBibTeXEntry(bibTeXEntry);
+				function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
+				updateBib(bib);
+				writePre();
+				updateBibAsync(bib, writePre);
+			} catch (e) {
+				console.error(e);
+				throw e;
+			}
+			if (i == 0) {
+				var text = document.createTextNode("Original:");
+				pre.parentNode.appendChild(text);
+			}
+			pre.parentNode.appendChild(origPre);
+		})();
 	}
 }
 
