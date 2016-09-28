@@ -128,10 +128,14 @@ function splitConfTitle(scanner) {
 		cityCountries.map(function (c) { return c + "|" + c + ", " + c; }).join("|") +
 	")";
 	var usaPatStr = "(" +
-		["NewYork, USA"].concat(
-			nonNewYorkCities.map(function (c) { return c + ", New York, USA"; }),
-			Object.keys(states).concat(Object.values(states)).map(function (s) { return "[a-z ]+, " + s + ", USA"; })
-		).join("|") +
+		["New York, USA", "New York City, USA"]
+		.concat(nonNewYorkCities.map(function (c) { return c + ", New York, USA"; }))
+		.concat(
+			Object.keys(states)
+			.concat(Object.values(states).filter(function (s) { return s != "New York"; }))
+			.map(function (s) { return "[a-z ]+, " + s + ", USA"; })
+		)
+		.join("|") +
 	")";
 	var otherPatStr = ("([a-z ]+, [a-z ]+)");
 
@@ -152,21 +156,39 @@ function splitConfTitle(scanner) {
 		")" +
 		"(?:,? ([0-9]{4}))?";
 
-	var dateMatched;
+	var dateMatched, addr, date = {};
 	[cityCountriesPatStr, usaPatStr, otherPatStr].some(function (addrPatStr) {
 		var addrDatePatStr = ", " + addrPatStr + ", " + datePatStr + "$";
 		var dateAddrPatStr = ", " + datePatStr + ", " + addrPatStr + "$";
 		if ((dateMatched = scanner.matchReplace(addrDatePatStr))) {
-			scanner.title.addr = dateMatched[1];
+			addr = dateMatched[1];
 			dateMatched = Array.prototype.slice.call(dateMatched, 1);
 		} else if ((dateMatched = scanner.matchReplace(dateAddrPatStr))) {
-			scanner.title.addr = dateMatched.pop();
+			addr = dateMatched.pop();
+		} else {
+			return false;
 		}
-		return dateMatched;
+
+		// quirk
+		if (addrPatStr == cityCountriesPatStr) {
+			if (addr.search(",") == -1)
+				addr = addr + ", " + addr;
+		}
+		if (addrPatStr == usaPatStr) {
+			var addrUsaAry = addr.split(", ");
+			if (!addrUsaAry[2]) {
+				addrUsaAry[0] = "New York City";
+				addrUsaAry[1] = "NY";
+				addrUsaAry[2] = "USA";
+			}
+			addrUsaAry[1] = states[addrUsaAry[1]];
+			addr = addrUsaAry.join(", ");
+		}
+
+		return true;
 	});
 	if (!dateMatched) return;
 
-	var date = {};
 	date.month1 = dateMatched[1] || dateMatched[8];
 	date.day1 = dateMatched[2] || dateMatched[6];
 	date.month2 = dateMatched[4];
@@ -174,6 +196,8 @@ function splitConfTitle(scanner) {
 	date.year = dateMatched[9];
 	if (date.day1) date.day1 = date.day1.replace(/[a-z]*/i, "");
 	if (date.day2) date.day2 = date.day2.replace(/[a-z]*/i, "");
+
+	if (addr) scanner.title.addr = addr;
 	scanner.title.date = date;
 }
 
