@@ -60,10 +60,11 @@ function serializeBibTeXEntry(bib) {
 //
 var fstOrdinals = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth"];
 var tenOrdinals = ["tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth"];
-var sndOrdinals = ["twentieth", "thirtieth", "fortieth", "fiftieth", "sixtieth", "seventieth", "eightieth", "ninetieth"];
+var sndNumbers = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 var engOrdinals = Array.prototype.concat.apply(fstOrdinals.concat(tenOrdinals),
-		sndOrdinals.map(function (so) {
-			return [so].concat(fstOrdinals.map(function (fo){ return so + "-" + fo; }));
+		sndNumbers.map(function (sn) {
+			return [sn.substr(0, -2) + "ieth"].concat(
+				fstOrdinals.map(function (fo){ return sn + "-" + fo; }));
 		}));
 var numOrdinalsTable = {};
 for (var i = 1; i < 100; i++)
@@ -82,8 +83,8 @@ function parseConfTitle(bibTitle) {
 	var m;
 	var scanner = {
 		title: {},
-		matchReplace: function (patStr, noIgnoreCase) {
-			var pat = new RegExp(patStr, noIgnoreCase ? '' : 'i');
+		matchReplace: function (patStr) {
+			var pat = new RegExp(patStr, 'i');
 			m = bibTitle.match(pat);
 			if (m) {
 				bibTitle = bibTitle.replace(pat, "");
@@ -96,6 +97,7 @@ function parseConfTitle(bibTitle) {
 	removePart(scanner);
 	removeProcSign(scanner);
 	splitConfTitle(scanner);
+	removeParentConf(scanner);
 	parseConfName(scanner);
 	return scanner.title;
 }
@@ -110,7 +112,7 @@ var procs = ["papers", "proceedings", "record", "records"];
 function removeProcSign(scanner) {
 	// check and remove "Proceeding of"/"Proceedings." or so
 	var procPatStr = "[a-z ]*(?:" + procs.join("|") + ")";
-	var procHeadPatStr = "^(" + procPatStr + ")(?: (?:of|from))?";
+	var procHeadPatStr = "^(" + procPatStr + ")(?: (?:of|from)(?: the)?)?";
 	var procTailPatStr = ", (" + procPatStr + ")\.?$";
 	var procMatched = scanner.matchReplace(procHeadPatStr);
 	if (!procMatched) procMatched = scanner.matchReplace(procTailPatStr);
@@ -131,7 +133,7 @@ function splitConfTitle(scanner) {
 			Object.keys(states).concat(Object.values(states)).map(function (s) { return "[a-z ]+, " + s + ", USA"; })
 		).join("|") +
 	")";
-	var otherPatStr = ("([a-z]+, [a-z]+)");
+	var otherPatStr = ("([a-z ]+, [a-z ]+)");
 
 	var monthesPatStr = "(" + monthes.join("|") + ")";
 	var daysPatStr = "([123]?[0-9])(?:st|nd|rd|th)?";
@@ -158,8 +160,7 @@ function splitConfTitle(scanner) {
 			scanner.title.addr = dateMatched[1];
 			dateMatched = Array.prototype.slice.call(dateMatched, 1);
 		} else if ((dateMatched = scanner.matchReplace(dateAddrPatStr))) {
-			scanner.title.addr = addrDate[-1];
-			dateMatched = Array.prototype.slice.call(dateMatched, 0, -1);
+			scanner.title.addr = dateMatched.pop();
 		}
 		return dateMatched;
 	});
@@ -176,30 +177,49 @@ function splitConfTitle(scanner) {
 	scanner.title.date = date;
 }
 
+function removeParentConf(scanner) {
+}
+
+var helds = ["co-located with", "held as part of"];
 var confs = ["conference", "colloquium", "meeting", "symposium", "workshop"];
 function parseConfName(scanner) {
-	var rawTitleName = scanner.bibTitle;
 	var title = scanner.title;
 
-	// check and remove "International Conference" or so
-	var confPatStr = "((?:[0-9a-z'{}]+ )*(?:" + confs.join("|") + "))(?: on)?";
-	var conf, confMatched = scanner.matchReplace(confPatStr);
-	if (confMatched) conf = confMatched[1];
-
-	// check and remove "{ABCD} 2000" or so
-	var abbrPatStr = "\\b{?([A-Z][a-zA-Z]*[A-Z])}? ?('?[0-9]{2}|[0-9]{4})\\b";
-	var abbr, abbrMatched = scanner.matchReplace(abbrPatStr, true);
-	if (abbrMatched) {
-		title.abbrName = abbrMatched[1];
-		if (abbrMatched[2])
-			title.abbrYear = abbrMatched[2].replace(/^'?(\d\d)$/, "19$1");
+	var hostPatStr = ",? (" + helds.join("|") + ") (.*)$";
+	var confPatStr = "((?:[0-9a-z'{}]+(?:-[0-9a-z'{}]+)* )*(?:" + confs.join("|") + "))(?: on)?\\b";
+	var abbrPatStr = "(?:^|[^a-z0-9'{}]) ?({?[a-z]+(?:-[a-z]+)*}? ?(?:'?[0-9]{2}|[0-9]{4})) ?(?:$|[^a-z0-9'{}])";
+	var restPatStr = "^[^a-z0-9'{}]*([a-z0-9'{}]+(?:,? [a-z0-9'{}]+)*)[^a-z0-9'{}]*$";
+	function fixAbbr(abbr) {
+		var abbrName = abbr.match(/[a-z]+(?:-[a-z]+)*/i)[0];
+		var abbrYear = abbr.match(/[0-9]+/i)[0];
+		if (abbrYear.length == 2)
+			abbrYear = (abbrYear >= "30" ? "19" : "20") + abbrYear;
+		return "{" + abbrName + "} " + abbrYear;
 	}
 
-	var restPatStr = "^(?:[^a-z0-9]*[^a-z0-9{])?([a-z0-9{][a-z0-9{}, ]*[a-z0-9}])[^a-z0-9]*$";
+	var hostMatched = scanner.matchReplace(hostPatStr);
+	if (hostMatched) {
+		var hostAbbrMatched = hostMatched[2].match(new RegExp(abbrPatStr, 'i'));
+		if (hostAbbrMatched)
+			hostMatched[2] = fixAbbr(hostAbbrMatched[1]);
+		title.held = hostMatched[1];
+		title.host = hostMatched[2];
+	}
+
+	var rawTitleName = scanner.bibTitle;
+	// check and remove "International Conference" or so
+	var confMatched = scanner.matchReplace(confPatStr);
+	// check and remove ": {ABCD} 2000 -" or so
+	var abbrMatched = scanner.matchReplace(abbrPatStr);
+	// check whether remained words are not separated by " - ", ":" or so
 	var restMatched = scanner.matchReplace(restPatStr);
+
 	if (restMatched) {
 		title.name = restMatched[1];
-		if (conf) title.conf = conf;
+		if (confMatched)
+			title.conf = confMatched[1];
+		if (abbrMatched)
+			title.abbr = fixAbbr(abbrMatched[1]);
 	} else {
 		title.name = rawTitleName;
 	}
@@ -210,12 +230,12 @@ function parseConfName(scanner) {
 //
 function serializeName(title) {
 	var result = "";
-	if (title.proc) result += title.proc + " of ";
 	if (title.conf) result += title.conf + " on ";
 	result += title.name;
-	if (title.abbrName) result += ", {" + title.abbrName + "}";
-	if (title.abbrYear) result += " " + title.abbrYear;
+	if (title.abbr) result += ", " + title.abbr;
 	if (title.part) result += ", " + title.part;
+	if (title.held) result += ", " + title.held + " " + title.host;
+	if (title.proc) result += ", " + title.proc;
 	return result;
 }
 
@@ -226,11 +246,11 @@ function serializeDate(title) {
 	function shortenMonth(month) { return month.slice(0, 3).toLowerCase(); }
 	var result = shortenMonth(date.month1);
 	if (date.month2)
-		result += " # {~" + date.day1 + "--} # " + shortenMonth(date.month2) + " # {" + date.day2 + "}";
+		result += " # {~" + date.day1 + "--} # " + shortenMonth(date.month2) + " # {~" + date.day2 + "}";
 	else if (date.day2)
 		result += " # {~" + date.day1 + "--" + date.day2 + "}";
 	else if (date.day1)
-		result += result += " # {~" + date.day1 + "}";
+		result += " # {~" + date.day1 + "}";
 	return result;
 }
 
@@ -311,8 +331,8 @@ function updateBib(bib) {
 	processConfTitle(bib);
 	normalizeIsbn(bib);
 	confKeyToId(bib);
+	journalKeyToId(bib);
 	articleId(bib);
-	journalToId(bib);
 	publisherToId(bib);
 	seriesToId(bib);
 	removeFields(bib);
@@ -342,6 +362,13 @@ function confKeyToId(bib) {
 		bib.fields.crossref = conv(bib.fields.crossref);
 }
 
+function journalKeyToId(bib) {
+	if (bib.type == "article" && bib.fields.journal) {
+		var journalMatched = bib.key.match(/^DBLP:journals\/([a-z]+)\//);
+		if (journalMatched) bib.fields.journal = "j:" + journalMatched[1];
+	}
+}
+
 function articleId(bib) {
 	if (bib.type != "proceedings") {
 		var lastNames = bib.fields.author.split(" and ").map(function (n) {
@@ -357,14 +384,11 @@ function articleId(bib) {
 	}
 }
 
-var journalTable = {
-	"Logical Methods in Computer Science": "j:lmcs",
-	"Inf. Comput.": "j:ic",
-	"J. {ACM}": "j:jacm",
-}
 var publisherTable = {
+	"Schloss Dagstuhl - Leibniz-Zentrum fuer Informatik": "p:dagstuhl",
 	"Elsevier": "p:elsevier",
 	"{IEEE} Computer Society": "p:ieeecomp",
+	"{SIAM}": "p:siam",
 	"Springer": "p:springer",
 }
 var seriesTable = {
@@ -379,7 +403,6 @@ function lookupFunction(field, table) {
 			bib.fields[field] = table[bib.fields[field]];
 	}
 }
-var journalToId = lookupFunction("journal", journalTable);
 var publisherToId = lookupFunction("publisher", publisherTable);
 var seriesToId = lookupFunction("series", seriesTable);
 
