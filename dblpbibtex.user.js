@@ -29,6 +29,7 @@ function parseBibTeXEntry(bibTeXEntry) {
 	bib.type = scanBibTeXEntry("@([a-z]+)\\s*")[1];
 	bib.key = scanBibTeXEntry("{(\\S+?),\\s*")[1];
 	bib.fields = {};
+	bib.openFields = {};
 	do {
 		var field = scanBibTeXEntry("([a-z]+)\\s*=\\s*")[1];
 		var value = scanBibTeXEntry("{")[0];
@@ -46,7 +47,7 @@ function parseBibTeXEntry(bibTeXEntry) {
 }
 
 function serializeBibTeXEntry(bib) {
-	function enbrace(k, v) { return k == "month" ? v : "{" + v + "}"; }
+	function enbrace(k, v) { return bib.openFields[k] ? v : "{" + v + "}"; }
 	var result =
 		"@" + bib.type + "{" + bib.key + ",\n" +
 			Object.keys(bib.fields).map(
@@ -78,6 +79,9 @@ function normalizeOrdinals(name) {
 //
 // title parser
 //
+var wordsPatStr = "(?:[a-z{}'.]|\\\\.)+";
+wordsPatStr = "(?:" + wordsPatStr + "(?:-" + wordsPatStr + ")*)";
+wordsPatStr = "(?:" + wordsPatStr + "(?: " + wordsPatStr + ")*)";
 function parseConfTitle(bibTitle) {
 	bibTitle = normalizeOrdinals(bibTitle);
 	var m;
@@ -132,11 +136,11 @@ function splitConfTitle(scanner) {
 		.concat(
 			Object.keys(states)
 			.concat(Object.values(states).filter(function (s) { return s != "New York"; }))
-			.map(function (s) { return "[a-z ]+, " + s + ", USA"; })
+			.map(function (s) { return wordsPatStr + ", " + s + ", USA"; })
 		)
 		.join("|") +
 	")";
-	var otherPatStr = ("([a-z ]+, [a-z ]+)");
+	var otherPatStr = "(" + wordsPatStr + ", " + wordsPatStr + ")";
 
 	var monthesPatStr = "(" + monthes.join("|") + ")";
 	var daysPatStr = "([123]?[0-9])(?:st|nd|rd|th)?";
@@ -370,7 +374,10 @@ function confKeyToId(bib) {
 function journalKeyToId(bib) {
 	if (bib.type == "article" && bib.fields.journal) {
 		var journalMatched = bib.key.match(/^DBLP:journals\/([a-z]+)\//);
-		if (journalMatched) bib.fields.journal = "j:" + journalMatched[1];
+		if (journalMatched) {
+			bib.fields.journal = "j:" + journalMatched[1];
+			bib.openFields.journal = true;
+		}
 	}
 }
 
@@ -404,8 +411,10 @@ var seriesTable = {
 }
 function lookupFunction(field, table) {
 	return function (bib) {
-		if (bib.fields[field] && table[bib.fields[field]])
+		if (bib.fields[field] && table[bib.fields[field]]) {
 			bib.fields[field] = table[bib.fields[field]];
+			bib.openFields[field] = true;
+		}
 	}
 }
 var publisherToId = lookupFunction("publisher", publisherTable);
@@ -418,14 +427,18 @@ function processConfTitle(bib) {
 	bib.fields.title = serializeName(title);
 	bib.fields.booktitle = bib.fields.title;
 	var date = serializeDate(title);
-	if (date) bib.fields.month = date;
+	if (date) {
+		bib.fields.month = date;
+		bib.openFields.month = true;
+	}
 	var addr = serializeAddr(title);
 	if (addr) bib.fields.address = addr;
 
 	var abbrBib = {
 		key: bib.key,
 		type: bib.type,
-		fields: {}
+		fields: {},
+		openFields: bib.openFields
 	};
 	abbrBib.fields.title = title.abbr ? title.abbr : bib.fields.title;
 	abbrBib.fields.booktitle = abbrBib.fields.title;
@@ -497,6 +510,16 @@ function fetchSpringerDoi(bib, cb) {
 // modify dblp page
 //
 return function () {
+	function writeUrl(pre, url) {
+		if (url) {
+			var a = pre.previousSibling;
+			var exists = a.nodeName.toLowerCase() == 'a';
+			if (!exists) a = document.createElement('a');
+			a.setAttribute('href', url);
+			a.textContent = url;
+			if (!exists) pre.parentNode.insertBefore(a, pre);
+		}
+	}
 	var xpath = "id('bibtex-section')/pre";
 	var nodes = document.evaluate(xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
 	for (var i = 0; i < nodes.snapshotLength; i++) {
@@ -504,17 +527,23 @@ return function () {
 		(function () {
 			var pre = nodes.snapshotItem(i);
 			var origPre = pre.cloneNode(true);
+			var origUrl;
 			var bibTeXEntry = pre.textContent;
 			try {
 				var bib = parseBibTeXEntry(bibTeXEntry);
+				origUrl = bib.fields.url;
 				var abbrBib = updateBib(bib);
-				function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
+				function writePre() {
+					pre.textContent = serializeBibTeXEntry(bib);
+					writeUrl(pre, bib.fields.url);
+				}
 				writePre();
 				updateBibAsync(bib, writePre);
 				if (abbrBib) {
 					var abbrPre = origPre.cloneNode(true);
 					abbrPre.textContent = serializeBibTeXEntry(abbrBib);
 					pre.parentNode.insertBefore(abbrPre, pre.nextSibling);
+					writeUrl(pre, bib.fields.url);
 				}
 			} catch (e) {
 				throw e;
@@ -524,8 +553,10 @@ return function () {
 				pre.parentNode.appendChild(text);
 			}
 			pre.parentNode.appendChild(origPre);
+			writeUrl(origPre, origUrl);
 		})();
 	}
+	dblp.ui.initTextSelect();
 }
 
 })()();
