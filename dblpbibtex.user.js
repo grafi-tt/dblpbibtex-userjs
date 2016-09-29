@@ -97,7 +97,6 @@ function parseConfTitle(bibTitle) {
 	removePart(scanner);
 	removeProcSign(scanner);
 	splitConfTitle(scanner);
-	removeParentConf(scanner);
 	parseConfName(scanner);
 	return scanner.title;
 }
@@ -199,9 +198,6 @@ function splitConfTitle(scanner) {
 
 	if (addr) scanner.title.addr = addr;
 	scanner.title.date = date;
-}
-
-function removeParentConf(scanner) {
 }
 
 var helds = ["co-located with", "held as part of"];
@@ -352,30 +348,15 @@ function addIsbnHyphen(isbn) {
 // update bib
 //
 function updateBib(bib) {
-	processConfTitle(bib);
-	normalizeIsbn(bib);
 	confKeyToId(bib);
 	journalKeyToId(bib);
 	articleId(bib);
+	normalizeIsbn(bib);
 	publisherToId(bib);
 	seriesToId(bib);
+	var abbrBib = processConfTitle(bib);
 	removeFields(bib);
-}
-
-function processConfTitle(bib) {
-	if (bib.type == "proceedings") {
-		var title = parseConfTitle(bib.fields.title);
-		bib.fields.title = serializeName(title);
-		var date = serializeDate(title);
-		if (date) bib.fields.month = date;
-		var addr = serializeAddr(title);
-		if (addr) bib.fields.address = addr;
-	}
-}
-
-function normalizeIsbn(bib) {
-	if (bib.fields.isbn)
-		bib.fields.isbn = addIsbnHyphen(toIsbn13(removeIsbnHyphen(bib.fields.isbn)));
+	return abbrBib;
 }
 
 function confKeyToId(bib) {
@@ -429,6 +410,36 @@ function lookupFunction(field, table) {
 }
 var publisherToId = lookupFunction("publisher", publisherTable);
 var seriesToId = lookupFunction("series", seriesTable);
+
+function processConfTitle(bib) {
+	if (bib.type != "proceedings") return;
+
+	var title = parseConfTitle(bib.fields.title);
+	bib.fields.title = serializeName(title);
+	bib.fields.booktitle = bib.fields.title;
+	var date = serializeDate(title);
+	if (date) bib.fields.month = date;
+	var addr = serializeAddr(title);
+	if (addr) bib.fields.address = addr;
+
+	var abbrBib = {
+		key: bib.key,
+		type: bib.type,
+		fields: {}
+	};
+	abbrBib.fields.title = title.abbr ? title.abbr : bib.fields.title;
+	abbrBib.fields.booktitle = abbrBib.fields.title;
+	["publisher", "series", "volume", "year"].forEach(function (field) {
+		if (bib.fields[field])
+			abbrBib.fields[field] = bib.fields[field];
+	});
+	return abbrBib;
+}
+
+function normalizeIsbn(bib) {
+	if (bib.fields.isbn)
+		bib.fields.isbn = addIsbnHyphen(toIsbn13(removeIsbnHyphen(bib.fields.isbn)));
+}
 
 function removeFields(bib) {
 	['timestamp', 'biburl', 'bibsource'].forEach(function (field) { delete bib.fields[field]; });
@@ -496,12 +507,16 @@ return function () {
 			var bibTeXEntry = pre.textContent;
 			try {
 				var bib = parseBibTeXEntry(bibTeXEntry);
+				var abbrBib = updateBib(bib);
 				function writePre() { pre.textContent = serializeBibTeXEntry(bib); }
-				updateBib(bib);
 				writePre();
 				updateBibAsync(bib, writePre);
+				if (abbrBib) {
+					var abbrPre = origPre.cloneNode(true);
+					abbrPre.textContent = serializeBibTeXEntry(abbrBib);
+					pre.parentNode.insertBefore(abbrPre, pre.nextSibling);
+				}
 			} catch (e) {
-				console.error(e);
 				throw e;
 			}
 			if (i == 0) {
