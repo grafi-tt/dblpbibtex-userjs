@@ -386,10 +386,10 @@ function journalKeyToId(bib) {
 function articleId(bib) {
 	if (bib.type != "proceedings") {
 		var lastNames = bib.fields.author.split(" and ").map(function (n) {
-			return n.split(" ").pop().replace(/[^a-z]/gi, "");
+			return n.split(" ").pop().replace(/[^-a-z]/gi, "");
 		});
 		var titleWords = bib.fields.title.split(" ").map(function (w) {
-			return w.replace(/[^a-z]/gi, "");
+			return w.replace(/[^-a-z]/gi, "");
 		});
 		bib.key =
 			lastNames[0] + lastNames.slice(1).map(function (l) { return l.charAt(); }).join("") +
