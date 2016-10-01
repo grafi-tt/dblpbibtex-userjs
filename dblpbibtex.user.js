@@ -300,7 +300,9 @@ function toIsbn13(isbn) {
 				w3 += +isbn[i];
 			}
 		}
-		isbn += (w1 + w3 * 3) % 10;
+		var checkDigit = -(w1 + w3 * 3) % 10;
+		if (checkDigit < 0) checkDigit += 10;
+		isbn += checkDigit;
 	}
 	return isbn;
 }
