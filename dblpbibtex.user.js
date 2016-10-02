@@ -358,6 +358,7 @@ function updateBib(bib) {
 	journalKeyToId(bib);
 	articleId(bib);
 	normalizeIsbn(bib);
+	fixInterval(bib);
 	publisherToId(bib);
 	seriesToId(bib);
 	var abbrBib = processConfTitle(bib);
@@ -396,6 +397,12 @@ function articleId(bib) {
 			(bib.fields.year ? bib.fields.year.slice(-2) : "") +
 			titleWords.slice(0, 3).map(function (w) { return w.toLowerCase().charAt(); }).join("");
 	}
+}
+
+function fixInterval(bib) {
+	function conv(str) { return str.replace(/(\d)+-(\d+)/, "$1--$2"); }
+	if (bib.fields.number) bib.fields.number = conv(bib.fields.number);
+	if (bib.fields.pages) bib.fields.pages = conv(bib.fields.pages);
 }
 
 var publisherTable = {
