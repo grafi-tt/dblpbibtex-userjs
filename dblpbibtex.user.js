@@ -558,7 +558,7 @@ return function () {
 			writeUrl(origPre, origUrl);
 		})();
 	}
-	dblp.ui.initTextSelect();
+	unsafeWindow.dblp.ui.initTextSelect();
 }
 
 })()();
