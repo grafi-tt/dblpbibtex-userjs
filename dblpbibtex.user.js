@@ -2,7 +2,7 @@
 // @name        dblp bibtex formatter
 // @namespace   http://grafi.jp/
 // @description hoge
-// @include     http://dblp.uni-trier.de/rec/bibtex/*
+// @include     /^https?://dblp2?\.uni-trier\.de/rec/bibtex/.+$/
 // @version     1
 // @grant       GM_xmlhttpRequest
 // ==/UserScript==
