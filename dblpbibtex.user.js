@@ -184,7 +184,7 @@ function splitConfTitle(scanner) {
 				addrUsaAry[1] = "NY";
 				addrUsaAry[2] = "USA";
 			}
-			addrUsaAry[1] = states[addrUsaAry[1]];
+			if (states[addrUsaAry[1]]) addrUsaAry[1] = states[addrUsaAry[1]];
 			addr = addrUsaAry.join(", ");
 		}
 
