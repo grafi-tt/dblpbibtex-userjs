@@ -366,7 +366,7 @@ function addIsbnHyphen(isbn) {
 // update bib
 //
 function updateBib(bib) {
-	confKeyToId(bib);
+	confKeyToIdWithTitle(bib);
 	journalKeyToId(bib);
 	articleId(bib);
 	normalizeIsbn(bib);
@@ -378,20 +378,23 @@ function updateBib(bib) {
 	return abbrBib;
 }
 
-function confKeyToId(bib) {
+function confKeyToIdWithTitle(bib) {
 	function conv(key) {
 		return key.replace("DBLP:conf", "c").replace(/\//g, ":").replace(/:[a-zA-Z][^:]*$/, "").replace(/-/g, ":");
 	}
 	if (bib.type == "proceedings") {
+		bib.confTitle = parseConfTitle(bib.fields.title);
 		bib.key = conv(bib.key);
 	} else if (bib.type == "inproceedings") {
 		if (bib.fields.crossref) {
 			bib.fields.crossref = conv(bib.fields.crossref);
 		} else {
+			bib.confTitle  = parseConfTitle(bib.fields.booktitle);
 			bib.key2 = conv(bib.key);
-			if (bib.fields.year) bib.key2 += ":" + bib.fields.year;
-			var partMatched = bib.fields.booktitle.match(/, Part {(I+)}$/);
-			if (partMatched) bib.key2 += ":" + partMatched[1].length;
+			var year = bib.confTitle.date.year || bib.fields.year;
+			if (year) bib.key2 += ":" + year;
+			var partNum = bib.confTitle.part && bib.confTitle.part.match(/Part {(I+)}/)[1].length;
+			if (partNum) bib.key2 += ":" + partNum;
 		}
 	}
 }
@@ -452,8 +455,9 @@ var publisherToId = lookupFunction("publisher", publisherTable);
 var seriesToId = lookupFunction("series", seriesTable);
 
 function processConfTitle(bib) {
+	var title = bib.confTitle;
+
 	if (bib.type == "proceedings") {
-		var title = parseConfTitle(bib.fields.title);
 		bib.fields.title = serializeName(title);
 		bib.fields.booktitle = bib.fields.title;
 
@@ -480,7 +484,6 @@ function processConfTitle(bib) {
 		return [[abbrBib]];
 
 	} else if (bib.type == "inproceedings" && bib.key2) {
-		var title = parseConfTitle(bib.fields.booktitle);
 		var parts = serializeHeadTail(title);
 		parts.date = serializeDate(title, true);
 		parts.addr = serializeAddr(title);
