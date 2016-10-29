@@ -273,7 +273,7 @@ function serializeName(title) {
 	return tail ? head + ", " + tail : head;
 }
 
-function serializeDate(title) {
+function serializeDate(title, withYear) {
 	if (!title.date) return;
 	var date = title.date;
 
@@ -285,6 +285,8 @@ function serializeDate(title) {
 		result += " # {~" + date.day1 + "--" + date.day2 + "}";
 	else if (date.day1)
 		result += " # {~" + date.day1 + "}";
+	if (withYear && date.year)
+		result += " # {, " + date.year + "}";
 	return result;
 }
 
@@ -387,6 +389,7 @@ function confKeyToId(bib) {
 			bib.fields.crossref = conv(bib.fields.crossref);
 		} else {
 			bib.key2 = conv(bib.key);
+			if (bib.fields.year) bib.key2 += ":" + bib.fields.year;
 			var partMatched = bib.fields.booktitle.match(/, Part {(I+)}$/);
 			if (partMatched) bib.key2 += ":" + partMatched[1].length;
 		}
@@ -478,10 +481,8 @@ function processConfTitle(bib) {
 
 	} else if (bib.type == "inproceedings" && bib.key2) {
 		var title = parseConfTitle(bib.fields.booktitle);
-		serializeDate(title);
-		serializeAddr(title);
 		var parts = serializeHeadTail(title);
-		parts.date = serializeDate(title);
+		parts.date = serializeDate(title, true);
 		parts.addr = serializeAddr(title);
 		var openFields = { [bib.key2]: true, [bib.key2 + ":date"]: true };
 		var partStrings = [];
