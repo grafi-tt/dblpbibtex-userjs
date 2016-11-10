@@ -117,7 +117,7 @@ function removeProcSign(scanner) {
 	// check and remove "Proceeding of"/"Proceedings." or so
 	var procPatStr = "[a-z ]*(?:" + procs.join("|") + ")";
 	var procHeadPatStr = "^(" + procPatStr + ")(?: (?:of|from)(?: the)?)?";
-	var procTailPatStr = ", (" + procPatStr + ")\.?$";
+	var procTailPatStr = "[,.] (" + procPatStr + ")\.?$";
 	var procMatched = scanner.matchReplace(procHeadPatStr);
 	if (!procMatched) procMatched = scanner.matchReplace(procTailPatStr);
 	if (procMatched) scanner.title.proc = procMatched[1];
@@ -391,7 +391,7 @@ function confKeyToIdWithTitle(bib) {
 		} else {
 			bib.confTitle  = parseConfTitle(bib.fields.booktitle);
 			bib.key2 = conv(bib.key);
-			var year = bib.confTitle.date.year || bib.fields.year;
+			var year = bib.confTitle.date && bib.confTitle.date.year || bib.fields.year;
 			if (year) bib.key2 += ":" + year;
 			var partNum = bib.confTitle.part && bib.confTitle.part.match(/Part {(I+)}/)[1].length;
 			if (partNum) bib.key2 += ":" + partNum;
@@ -484,14 +484,18 @@ function processConfTitle(bib) {
 		return [[abbrBib]];
 
 	} else if (bib.type == "inproceedings" && bib.key2) {
-		var parts = serializeHeadTail(title);
+		var parts = {};
+		var {head, tail} = serializeHeadTail(title);
+		parts.title = head;
+		parts.proc = tail;
 		parts.date = serializeDate(title, true);
-		parts.addr = serializeAddr(title);
-		var openFields = { [bib.key2]: true, [bib.key2 + ":date"]: true };
+		parts.address = serializeAddr(title);
+		var key2val = bib.key2 + ":value";
+		var openFields = { [key2val]: true, [bib.key2 + ":date"]: true };
 		var partStrings = [];
 		var booktitle = "";
 		var isFirst = true;
-		["head", "date", "addr", "tail"].forEach(function (key) {
+		["title", "date", "address", "tail"].forEach(function (key) {
 			var key2 = bib.key2 + ":" + key;
 			if (parts[key]) {
 				partStrings.push({ type: "string", key: key2, value: parts[key], openFields: openFields });
@@ -504,10 +508,10 @@ function processConfTitle(bib) {
 					bib.openFields[key2] = true;
 			}
 		});
-		partStrings.push({ type: "string", key: bib.key2, value: booktitle, openFields: openFields });
-		var abbrString = { type: "string", key: bib.key2, value: title.abbr || parts.head, openFields: {} };
-		bib.openFields[bib.key2] = true;
-		bib.fields.booktitle = bib.key2;
+		partStrings.push({ type: "string", key: key2val, value: booktitle, openFields: openFields });
+		var abbrString = { type: "string", key: key2val, value: title.abbr || parts.title, openFields: {} };
+		bib.openFields[key2val] = true;
+		bib.fields.booktitle = key2val;
 		bib.openFields.booktitle = true;
 		return [partStrings, [abbrString]];
 	}
