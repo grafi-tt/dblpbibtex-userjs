@@ -70,7 +70,7 @@ var engOrdinals = Array.prototype.concat.apply(fstOrdinals.concat(tenOrdinals),
 		}));
 var numOrdinalsTable = {};
 for (var i = 1; i < 100; i++)
-	numOrdinalsTable[engOrdinals[i-1]] = i + ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][i%10];
+	numOrdinalsTable[engOrdinals[i-1]] = i + ["st", "nd", "rd", "th", "th", "th", "th", "th", "th"][(i-1)%10];
 var ordinalsPatStr = engOrdinals.join('|');
 function normalizeOrdinals(name) {
 	return name.replace(new RegExp(ordinalsPatStr, 'ig'),
