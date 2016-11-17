@@ -495,7 +495,7 @@ function processConfTitle(bib) {
 		var partStrings = [];
 		var booktitle = "";
 		var isFirst = true;
-		["title", "date", "address", "tail"].forEach(function (key) {
+		["title", "date", "address", "proc"].forEach(function (key) {
 			var key2 = bib.key2 + ":" + key;
 			if (parts[key]) {
 				partStrings.push({ type: "string", key: key2, value: parts[key], openFields: openFields });
