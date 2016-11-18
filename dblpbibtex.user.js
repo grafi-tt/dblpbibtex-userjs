@@ -36,9 +36,9 @@ function parseBibTeXEntry(bibTeXEntry) {
 		var depth = 1;
 		while (depth > 0) {
 			value += scanBibTeXEntry("[^{}]*[{}]")[0];
-			depth += value.slice(-2, -1) == '\\' ? 0 : value.slice(-1) == '{' ? 1 : -1;
+			depth += value.slice(-2, -1) == '\\' ? 0 : value.slice(-1) == "{" ? 1 : -1;
 		}
-		bib.fields[field] = value.slice(1, -1).replace(/\s+/g, ' ');
+		bib.fields[field] = value.slice(1, -1).replace(/\s+/g, " ");
 		var sep = scanBibTeXEntry("\\s*([,}])\\s*")[1];
 	} while (sep == ',');
 
