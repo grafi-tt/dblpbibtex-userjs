@@ -436,6 +436,7 @@ var publisherTable = {
 	"{IEEE} Computer Society": "p:ieeecomp",
 	"{SIAM}": "p:siam",
 	"Springer": "p:springer",
+	"{ACM}": "p:acm",
 }
 var seriesTable = {
 	"{EPTCS}": "s:eptcs",
