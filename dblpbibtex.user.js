@@ -131,16 +131,16 @@ function splitConfTitle(scanner) {
 	var cityCountriesPatStr = "(" +
 		cityCountries.map(function (c) { return c + "|" + c + ", " + c; }).join("|") +
 	")";
-	var usaPatStr = "(" +
-		["New York, USA", "New York City, USA"]
-		.concat(nonNewYorkCities.map(function (c) { return c + ", New York, USA"; }))
+	var usaPatStr = "((?:" +
+		["New York", "New York City"]
+		.concat(nonNewYorkCities.map(function (c) { return c + ", New York"; }))
 		.concat(
 			Object.keys(states)
 			.concat(Object.values(states).filter(function (s) { return s != "New York"; }))
-			.map(function (s) { return wordsPatStr + ", " + s + ", USA"; })
+			.map(function (s) { return wordsPatStr + ", " + s; })
 		)
 		.join("|") +
-	")";
+	"), (?:USA|{USA}))";
 	var otherPatStr = "(" + wordsPatStr + ", " + wordsPatStr + ")";
 
 	var monthesPatStr = "(" + monthes.join("|") + ")";
@@ -183,9 +183,9 @@ function splitConfTitle(scanner) {
 			if (!addrUsaAry[2]) {
 				addrUsaAry[0] = "New York City";
 				addrUsaAry[1] = "NY";
-				addrUsaAry[2] = "USA";
 			}
 			if (states[addrUsaAry[1]]) addrUsaAry[1] = states[addrUsaAry[1]];
+			addrUsaAry[2] = "USA";
 			addr = addrUsaAry.join(", ");
 		}
 
