@@ -278,15 +278,14 @@ function serializeDate(title, withYear) {
 	var date = title.date;
 
 	function shortenMonth(month) { return month.slice(0, 3).toLowerCase(); }
+	function year() { return withYear && date.year ? ", " + date.year : ""; }
 	var result = shortenMonth(date.month1);
 	if (date.month2)
-		result += " # {~" + date.day1 + "--} # " + shortenMonth(date.month2) + " # {~" + date.day2 + "}";
+		result += " # {~" + date.day1 + "--} # " + shortenMonth(date.month2) + " # {~" + date.day2 + year() + "}";
 	else if (date.day2)
-		result += " # {~" + date.day1 + "--" + date.day2 + "}";
+		result += " # {~" + date.day1 + "--" + date.day2 + year() + "}";
 	else if (date.day1)
-		result += " # {~" + date.day1 + "}";
-	if (withYear && date.year)
-		result += " # {, " + date.year + "}";
+		result += " # {~" + date.day1 + year() + "}";
 	return result;
 }
 
