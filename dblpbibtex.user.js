@@ -31,14 +31,14 @@ function parseBibTeXEntry(bibTeXEntry) {
 	bib.fields = {};
 	bib.openFields = {};
 	do {
-		var field = scanBibTeXEntry("([a-z]+)\\s*=\\s*")[1];
+		var field = scanBibTeXEntry("([a-zA-Z]+)\\s*=\\s*")[1];
 		var value = scanBibTeXEntry("{")[0];
 		var depth = 1;
 		while (depth > 0) {
 			value += scanBibTeXEntry("[^{}]*[{}]")[0];
-			depth += value.slice(-2, -1) == '\\' ? 0 : value.slice(-1) == "{" ? 1 : -1;
+			depth += value.slice(-2, -1) == '\\' ? 0 : value.slice(-1) == '{' ? 1 : -1;
 		}
-		bib.fields[field] = value.slice(1, -1).replace(/\s+/g, " ");
+		bib.fields[field] = value.slice(1, -1).replace(/\s+/g, ' ');
 		var sep = scanBibTeXEntry("\\s*([,}])\\s*")[1];
 	} while (sep == ',');
 
@@ -523,7 +523,7 @@ function normalizeIsbn(bib) {
 }
 
 function removeFields(bib) {
-	["timestamp", "biburl", "bibsource"].forEach(function (field) { delete bib.fields[field]; });
+	["timestamp", "biburl", "bibsource", "archivePrefix", "eprint"].forEach(function (field) { delete bib.fields[field]; });
 	if (bib.type == "inproceedings" && bib.fields.crossref) delete bib.fields.booktitle;
 }
 
