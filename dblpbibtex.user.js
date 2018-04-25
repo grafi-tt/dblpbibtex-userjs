@@ -439,9 +439,10 @@ var publisherTable = {
 }
 var seriesTable = {
 	"{EPTCS}": "s:eptcs",
-	"LIPIcs": "s:lipics",
+	"{LIPIcs}": "s:lipics",
 	"Lecture Notes in Computer Science": "s:lncs",
 	"Lecture Notes in Mathematics": "s:lnm",
+	"{JMLR} Workshop and Conference Proceedings": "s:jmlr",
 }
 function lookupFunction(field, table) {
 	return function (bib) {
