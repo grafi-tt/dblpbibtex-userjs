@@ -4,7 +4,7 @@
 // @description hoge
 // @include     /^https?://dblp2?\.uni-trier\.de/rec/bibtex\d?/.+$/
 // @version     1
-// @grant       GM_xmlhttpRequest
+// @grant       GM.xmlHttpRequest
 // ==/UserScript==
 
 (function () {
@@ -539,7 +539,7 @@ function updateBibAsync(bib, cb) {
 function resolveDoi(bib, cb) {
 	if (!bib.fields.doi) return;
 	if (bib.fields.url && !bib.fields.url.match("dx.doi.org")) return;
-	GM_xmlhttpRequest({
+	GM.xmlHttpRequest({
 		method: 'GET',
 		url: 'http://doi.org/api/handles/' + encodeURIComponent(bib.fields.doi),
 		onload: function (response) {
@@ -558,7 +558,7 @@ function fetchSpringerDoi(bib, cb) {
 	var isbn = bib.fields.isbn;
 	var isSpringer = isbn && ["978-3-540", "978-3-642"].find( function (prefix) { return prefix.startsWith(isbn); });
 	if (isSpringer) {
-		GM_xmlhttpRequest({
+		GM.xmlHttpRequest({
 			method: 'GET',
 			url: "https://link.springer.com/" + isbn,
 			onload: function (res) {
