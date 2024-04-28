@@ -3,6 +3,7 @@
 // @namespace   http://grafi.jp/
 // @description hoge
 // @include     /^https?://dblp2?\.uni-trier\.de/rec/.*\?view=bibtex$/
+// @include     /^https?://dblp\.org/rec/.*\?view=bibtex$/
 // @version     1
 // @grant       GM.xmlHttpRequest
 // ==/UserScript==
@@ -431,6 +432,7 @@ function fixInterval(bib) {
 
 var publisherTable = {
 	"Schloss Dagstuhl - Leibniz-Zentrum fuer Informatik": "p:dagstuhl",
+	"Schloss Dagstuhl - Leibniz-Zentrum f{\\\"{u}}r Informatik": "p:dagstuhl",
 	"Elsevier": "p:elsevier",
 	"{IEEE} Computer Society": "p:ieeecomp",
 	"{SIAM}": "p:siam",
@@ -440,6 +442,7 @@ var publisherTable = {
 var seriesTable = {
 	"{EPTCS}": "s:eptcs",
 	"{LIPIcs}": "s:lipics",
+	"LIPIcs": "s:lipics",
 	"Lecture Notes in Computer Science": "s:lncs",
 	"Lecture Notes in Mathematics": "s:lnm",
 	"{JMLR} Workshop and Conference Proceedings": "s:jmlr",
